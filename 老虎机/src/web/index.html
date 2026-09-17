@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forager 顺序调整</title>
+<style>
+  :root{
+    --bg:#1e1e1e; --bg2:#252526; --bg3:#2d2d30; --fg:#e8e8e8;
+    --fdim:#9d9d9d; --acc:#4a9eff; --border:#3c3c3c;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--fg); font-family:"Microsoft YaHei UI","Segoe UI",sans-serif;
+       min-height:100vh;}
+  #wrap{max-width:920px; margin:0 auto; padding:20px;}
+  #titlebar{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  #titlebar h1{font-size:20px; font-weight:bold;}
+  #rbtns{display:flex; gap:8px; align-items:center; margin-bottom:10px;}
+  button{background:var(--bg3); color:var(--fg); border:1px solid var(--border); border-radius:6px;
+         padding:7px 14px; font-size:14px; cursor:pointer; font-family:inherit;}
+  button:hover{background:#3e3e42;}
+  #rcount{margin-left:auto; color:var(--fdim); font-size:13px;}
+  #rhint{color:var(--fdim); font-size:12px; margin-bottom:12px; line-height:1.7;}
+  /* 分组 */
+  .group{margin-bottom:12px; border:1px solid var(--border); border-radius:8px;
+         overflow:hidden; background:var(--bg2);}
+  .group.collapsed .glist{display:none;}
+  .ghead{display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:grab;
+         background:var(--bg3); font-weight:bold; font-size:14px; user-select:none;}
+  .ghead:active{cursor:grabbing;}
+  .hgrip{color:var(--fdim);}
+  .group-ghost{opacity:.35; border-color:var(--acc);}
+  .group-chosen{background:#3a3d42; border-color:var(--acc);}
+  .ghead .arr{color:var(--acc);}
+  .ghead .gcnt{margin-left:auto; color:var(--fdim); font-weight:normal; font-size:12px;}
+  .glist{list-style:none; padding:6px;}
+  .item{display:flex; align-items:center; gap:10px; background:var(--bg2); border:1px solid var(--border);
+        border-radius:6px; padding:6px 10px; margin-bottom:6px; cursor:grab; user-select:none;}
+  .item:active{cursor:grabbing;}
+  .item.dragging{opacity:.6; border-color:var(--acc);}
+  .item .handle{color:var(--fdim); cursor:grab;}
+  .item img{width:32px; height:32px; object-fit:contain;}
+  .item .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px;}
+  .item .rk{color:var(--acc); font-variant-numeric:tabular-nums; cursor:pointer;
+            min-width:32px; text-align:center; padding:2px 6px; border-radius:4px;}
+  .item .rk:hover{background:var(--bg3); color:#fff;}
+  .rk-input{width:54px; text-align:center; font:inherit; font-size:13px; color:#fff;
+            background:#161616; border:1px solid var(--acc); border-radius:4px; padding:2px 4px;}
+  .sortable-ghost{opacity:.35;}
+  .sortable-chosen{background:#3a3d42; border-color:var(--acc);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="titlebar">
+    <h1>🎰 Forager 顺序调整</h1>
+    <span id="rcount">物品数 --</span>
+  </div>
+  <div id="rhint">按文件夹分组。<b>拖动分组名</b>上下移动整组；点分组名<b>折叠/展开</b>；按住 ☰ <b>组内/跨组拖动</b>，或<b>点行尾数字</b>输入目标总排名（1=最优先，<b>99=归入"99"不想要组</b>），松手/回车即自动保存。</div>
+  <div id="rbtns">
+    <button id="btndefault" title="恢复为文件夹默认顺序">⏫ 恢复默认</button>
+    <span style="color:var(--fdim);font-size:12px;">保存后请用「启动识别.bat」开始识别，读取此顺序。</span>
+  </div>
+  <div id="groups"></div>
+</div>
+
+<script src="Sortable.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let sortables = [];
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+// ---------- 分组排序 ----------
+async function load(){
+  const d = await api('/api/items');
+  renderGroups(d.groups || []);
+  initSortables();
+  const total = (d.groups || []).reduce((a,g) => a + (g.items ? g.items.length : 0), 0);
+  $('#rcount').textContent = '物品数 ' + total;
+}
+
+function renderGroups(groups){
+  const el = $('#groups');
+  el.innerHTML = '';
+  const gcolors = ['#4a9eff','#3fb950','#d29922','#f778ba','#8b9dff','#ffb64d','#9d9d9d'];
+  groups.forEach((g, gi) => {
+    const box = document.createElement('div');
+    box.className = 'group'; box.dataset.gname = g.name;
+    const head = document.createElement('div'); head.className = 'ghead';
+    head.innerHTML = `<span class="hgrip">⠿</span><span class="arr">▾</span><span class="gname"></span><span class="gcnt"></span>`;
+    head.querySelector('.gname').textContent = g.name;
+    head.querySelector('.gname').style.color = gcolors[gi % gcolors.length];
+    head.querySelector('.gcnt').textContent = (g.items ? g.items.length : 0) + ' 项';
+    head.addEventListener('click', () => {
+      box.classList.toggle('collapsed');
+      head.querySelector('.arr').textContent = box.classList.contains('collapsed') ? '▸' : '▾';
+    });
+    const ul = document.createElement('ul'); ul.className = 'glist';
+    (g.items || []).forEach(it => {
+      const li = document.createElement('li');
+      li.className = 'item'; li.dataset.name = it.name;
+      li.innerHTML = `<span class="handle">☰</span>` +
+        `<img src="${it.icon}" alt="" loading="lazy">` +
+        `<span class="nm"></span><span class="rk"></span>`;
+      li.querySelector('.nm').textContent = it.name;
+      ul.appendChild(li);
+    });
+    box.appendChild(head); box.appendChild(ul);
+    el.appendChild(box);
+  });
+  renumberAll();
+}
+
+function initSortables(){
+  sortables.forEach(s => { try{ s.destroy(); }catch(e){} });
+  sortables = [];
+  // 外层：整组上下拖动
+  sortables.push(new Sortable($('#groups'), {
+    animation: 150,
+    handle: '.ghead',
+    ghostClass: 'group-ghost',
+    chosenClass: 'group-chosen',
+    onEnd: async () => { await saveOrder(); },
+  }));
+  // 内层：每个分组内的物品（组内 + 跨组拖动）
+  document.querySelectorAll('#groups .glist').forEach(ul => {
+    sortables.push(new Sortable(ul, {
+      animation: 150,
+      handle: '.handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      draggingClass: 'dragging',
+      group: { name: 'items', pull: true, put: true },
+      onEnd: async () => { await saveOrder(); },
+    }));
+  });
+}
+
+function renumberAll(){
+  const all = [...document.querySelectorAll('#groups li.item')];
+  all.forEach((li, i) => { const rk = li.querySelector('.rk'); if(rk) rk.textContent = String(i + 1); });
+}
+
+async function saveOrder(){
+  const groups = [...document.querySelectorAll('#groups .group')].map(g => ({
+    name: g.dataset.gname,
+    items: [...g.querySelectorAll('li.item')].map(li => li.dataset.name),
+  })).filter(g => g.items.length);
+  renumberAll();
+  const total = groups.reduce((a,g) => a + g.items.length, 0);
+  await api('/api/items_order', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({groups}),
+  });
+  $('#rcount').textContent = '物品数 ' + total;
+}
+
+// 点击行尾数字 -> 输入目标总排名，自动移动到对应位置（可跨组）
+function makeRankEditable(rk){
+  if(rk.dataset.editing) return;
+  rk.dataset.editing = '1';
+  const li = rk.closest('.item');
+  const all = () => [...document.querySelectorAll('#groups li.item')];
+  const n = all().length;
+  const inp = document.createElement('input');
+  inp.className = 'rk-input';
+  inp.value = String(all().indexOf(li) + 1);
+  inp.setAttribute('type', 'number'); inp.setAttribute('min', '1'); inp.setAttribute('max', String(n));
+  rk.replaceWith(inp);
+  inp.focus(); inp.select();
+  let done = false;
+  const findGroup = gname =>
+    [...document.querySelectorAll('#groups .group')].find(g => g.dataset.gname === gname);
+  const finish = (apply) => {
+    if(done) return; done = true;
+    const v = parseInt(inp.value, 10);
+    const cur = all().indexOf(li) + 1;
+    const span = document.createElement('span'); span.className = 'rk';
+    inp.replaceWith(span);
+    if(!apply){
+      saveOrder(); return;
+    }
+    // 输入 99 -> 归入 "99" 分组（不想要清单）
+    if(v === 99){
+      const g99 = findGroup('99');
+      if(g99){
+        if(g99.classList.contains('collapsed')){
+          g99.classList.remove('collapsed');
+          const a = g99.querySelector('.ghead .arr'); if(a) a.textContent = '▾';
+        }
+        li.parentNode.removeChild(li);
+        g99.querySelector('.glist').appendChild(li);
+        saveOrder();
+        return;
+      }
+      saveOrder(); return;
+    }
+    if(v >= 1 && v <= n && v !== cur){
+      const t = all()[v - 1];
+      if(t){
+        const g = t.closest('.group');
+        if(g.classList.contains('collapsed')){
+          g.classList.remove('collapsed');
+          const a = g.querySelector('.ghead .arr'); if(a) a.textContent = '▾';
+        }
+      }
+      const target = all()[v - 1];
+      li.parentNode.removeChild(li);
+      if(target){ target.parentNode.insertBefore(li, target); }
+      else {
+        const gls = [...document.querySelectorAll('#groups .glist')];
+        if(gls.length) gls[gls.length - 1].appendChild(li);
+      }
+    }
+    saveOrder();
+  };
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){ e.preventDefault(); finish(true); }
+    else if(e.key === 'Escape'){ finish(false); }
+  });
+  inp.addEventListener('blur', () => finish(true));
+  inp.addEventListener('click', e => e.stopPropagation());
+}
+
+// 点击行尾数字（委托到分组容器）
+$('#groups').addEventListener('click', ev => {
+  const t = ev.target.closest('.rk');
+  if(t && !t.dataset.editing){ ev.stopPropagation(); makeRankEditable(t); }
+});
+
+$('#btndefault').onclick = async () => {
+  await api('/api/items_order', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({groups: []}),
+  });
+  await load();
+};
+
+load();
+</script>
+</body>
+</html>
