@@ -1,57 +1,28 @@
 # -*- coding: utf-8 -*-
 """
 机器人项目配置管理器
-用于读取和保存 config.json 文件
+所有配置项均以属性默认值为准，无需外部 JSON 文件。
 用法：
     from 配置 import Config
     cfg = Config()
     print(cfg.stop_heart)  # 访问属性
 """
-import json
 import os
 
 
 class Config:
-    """配置管理类"""
+    """配置管理类——直接使用代码内默认值，无需外部配置文件"""
     
-    def __init__(self, path=None):
-        if path is None:
-            path = os.path.join(os.path.dirname(__file__), "config.json")
-        self._path = path
-        self.load()
+    def __init__(self):
+        pass
     
     def load(self):
-        """从 JSON 文件加载配置"""
-        try:
-            with open(self._path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            
-            # 路径映射（兼容旧版 lib/ 目录）
-            if not self._path.startswith("src/"):
-                raw["tesseract_exe"] = raw.get("tesseract_exe", "").replace(
-                    "lib/tesseract/", "src/lib/tesseract/")
-                raw["sound_effect"] = raw.get("sound_effect", "").replace(
-                    "音效.mp3", "src/resources/音效.mp3")
-            
-            # 复制所有字段到实例
-            for key in dir(self):
-                if not key.startswith("_"):
-                    val = raw.get(key.lower(), None)
-                    if val is not None:
-                        setattr(self, key, val)
-        except Exception as e:
-            raise ValueError(f"配置文件 {self._path} 读取失败：{e}")
+        """无需加载外部文件，默认值已在各属性 property 中定义"""
+        pass
     
     def save(self):
-        """保存配置到 JSON 文件"""
-        data = {}
-        for key in dir(self):
-            if not key.startswith("_") and not callable(getattr(self, key)):
-                val = getattr(self, key)
-                data[key.lower()] = val
-        
-        with open(self._path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        """无需保存，所有配置直接修改 配置.py 中的默认值即可"""
+        pass
     
     # ========== 游戏与程序路径 ==========
     

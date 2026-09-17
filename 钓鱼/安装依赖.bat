@@ -1,17 +1,16 @@
 @echo off
-chcp 65001 >nul
-echo æ­£åœ¨å®‰è£…é’“é±¼é¡¹ç›®çš„ä¾èµ–åŒ…...
+chcp 936 >nul
+echo ÕıÔÚ°²×°µöÓãÏîÄ¿µÄÒÀÀµ°ü...
 pip install --no-index --find-links=src\libs -r requirements.txt
-
 if %errorlevel% equ 0 (
     echo.
-    echo ä¾èµ–å®‰è£…æˆåŠŸï¼æ­£åœ¨æ¸…ç†å®‰è£…æ–‡ä»¶...
+    echo ÒÀÀµ°²×°³É¹¦£¡ÕıÔÚÇåÀí°²×°ÎÄ¼ş...
     rmdir /s /q src\libs
     del requirements.txt
     del "%~f0"
-    echo æ¸…ç†å®Œæˆï¼
+    echo ÇåÀíÍê³É£¡
 ) else (
     echo.
-    echo ä¾èµ–å®‰è£…å¤±è´¥ï¼Œä¿ç•™å®‰è£…æ–‡ä»¶ä»¥ä¾¿é‡è¯•ã€‚
+    echo ÒÀÀµ°²×°Ê§°Ü£¬±£Áô°²×°ÎÄ¼şÒÔ±ãÖØÊÔ¡£
 )
 pause
