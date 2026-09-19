@@ -29,7 +29,7 @@ class Config:
     @property
     def tesseract_exe(self):
         """Tesseract OCR 引擎路径（相对或绝对路径均可）"""
-        return getattr(self, "_tesseract_exe", "src/lib/tesseract/tesseract.exe")
+        return getattr(self, "_tesseract_exe", "src/ocr/tesseract.exe")
     
     @tesseract_exe.setter
     def tesseract_exe(self, value):
@@ -114,11 +114,15 @@ class Config:
         self._stop_heart = max(1, int(value))
     
     # ========== 图标识别区域 ==========
+    # 鼠标悬停位置 + 点击位置（两个区域），坐标来自原始 config.json
     
     @property
     def regions(self):
         """鼠标悬停位置 + 点击区域列表 [{name, left, top, right, bottom}]"""
-        return getattr(self, "_regions", [])
+        return getattr(self, "_regions", [
+            {"name": "区域 1", "left": 652, "top": 455, "right": 820, "bottom": 621},
+            {"name": "区域 2", "left": 1101, "top": 455, "right": 1268, "bottom": 621},
+        ])
     
     @regions.setter
     def regions(self, value):
@@ -126,8 +130,11 @@ class Config:
     
     @property
     def ocr_regions(self):
-        """OCR 文字识别框列表（用于从截图读字）"""
-        return getattr(self, "_ocr_regions", [])
+        """OCR 文字识别框列表（用于从截图读字），比图标识别框更靠下"""
+        return getattr(self, "_ocr_regions", [
+            {"name": "区域 1", "left": 615, "top": 615, "right": 870, "bottom": 830},
+            {"name": "区域 2", "left": 1060, "top": 615, "right": 1320, "bottom": 830},
+        ])
     
     @ocr_regions.setter
     def ocr_regions(self, value):

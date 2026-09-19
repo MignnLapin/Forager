@@ -8,6 +8,7 @@ import os
 import time
 import ctypes
 import math
+import shutil
 import difflib
 import threading
 import subprocess
@@ -61,10 +62,16 @@ VK_CAPITAL = 0x14
 AUTO_HOTKEY_ID = 2       # F8: 全自动模式
 
 def _get_tesseract_exe():
-    """返回 tesseract.exe 的路径，优先使用 lib/ 目录下的本地副本。"""
-    local = os.path.join(BASE_DIR, "lib", "tesseract", "tesseract.exe")
+    """返回可用的 tesseract.exe 路径：优先系统已安装的，其次项目内置便携版，最后走配置路径。"""
+    # 1) 系统 PATH 中已安装的 tesseract
+    system = shutil.which("tesseract")
+    if system:
+        return system
+    # 2) 项目内置便携版（绿色免安装，随项目一起分发，含中文包）
+    local = os.path.join(BASE_DIR, "ocr", "tesseract.exe")
     if os.path.isfile(local):
         return local
+    # 3) 配置中指定的路径
     return _path_cfg.get("tesseract_exe", local)
 
 # --- 路径相关配置（从 配置.py 读取） ---
@@ -792,12 +799,7 @@ class App:
 
 def main():
     set_dpi_aware()
-    try:
-        cfg = _load_cfg()
-    except ValueError as e:
-        print(e, flush=True)
-        input("按回车退出...")
-        return
+    cfg = _path_cfg
     if not cfg.get("regions"):
         print("配置中没有任何识别区域，退出", flush=True)
         return
