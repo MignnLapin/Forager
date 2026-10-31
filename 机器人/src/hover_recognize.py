@@ -77,7 +77,7 @@ def _get_tesseract_exe():
 # --- 路径相关配置（从 配置.py 读取） ---
 FORAGER_EXE = _path_cfg.get("forager_exe", r"C:\Games\Forager\Forager.exe")
 _sfx_raw = _path_cfg.get("sound_effect", "音效.mp3")
-SFX_FILE = _sfx_raw if os.path.isabs(_sfx_raw) else os.path.join(RES_DIR, _sfx_raw)
+SFX_FILE = _sfx_raw if os.path.isabs(_sfx_raw) else os.path.join(RES_DIR, os.path.basename(_sfx_raw))
 
 # 各奖品卡片的期望文字（名称/损失1点最大生命值/描述），用于 OCR 结果的模糊比对
 PRIZE_TEXTS = {
@@ -284,6 +284,7 @@ class App:
         self._build_ui()
         self.auto_running = False
         self.auto_stop = threading.Event()
+        self.closing = threading.Event()   # 仅程序退出时置位；与全自动停止标志分开，保证热键线程常驻可反复停/开
         self.logpath = os.path.join(BASE_DIR, "全自动.log")
         try:
             open(self.logpath, "w", encoding="utf-8").close()   # 每次启动清空日志
@@ -332,6 +333,7 @@ class App:
 
     def _quit(self):
         self.auto_stop.set()
+        self.closing.set()   # 结束热键监听线程并注销 F8 热键
         try:
             self.sct.close()
         except Exception:
@@ -368,7 +370,7 @@ class App:
             0, "STATIC", "", 0, 0, 0, 0, 0, ctypes.c_void_p(HWND_MESSAGE), None, None, None)
         user32.RegisterHotKey(hwnd, AUTO_HOTKEY_ID, 0, VK_F8)
         msg = wintypes.MSG()
-        while not self.auto_stop.is_set():
+        while not self.closing.is_set():
             r = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
             if r <= 0:
                 break
@@ -598,8 +600,8 @@ class App:
                 last_check = now
                 hearts = self.count_hearts_box(HEART_BOX)
                 self.log(f"连点黄色中… 识别到爱心 {hearts} 个")
-                if hearts >= 4:   # 主菜单可能误判到相似图案，≥4 才确认真实进入游戏的血条
-                    self.log("已识别到爱心（≥4），停止连点，进入游戏")
+                if hearts >= 1:   # 主菜单会误判到0个，≥1 即确认真实进入游戏的血条
+                    self.log("已识别到爱心（≥1），停止连点，进入游戏")
                     return True
             mouse_click(*pos)
             if not self._wake(0.1):
@@ -623,8 +625,9 @@ class App:
             pass
 
     def run_forager(self):
+        bat = os.path.join(os.path.dirname(FORAGER_EXE), "run.bat")
         try:
-            subprocess.Popen([FORAGER_EXE])
+            subprocess.Popen(["cmd", "/c", bat], cwd=os.path.dirname(FORAGER_EXE))
         except Exception as e:
             self.log(f"启动Forager失败:{e}")
 
@@ -779,7 +782,7 @@ class App:
                 if not self._wake(0.5):
                     break
                 self.run_forager()
-                if not self._wake(0.5):   # 打开游戏后等待0.5秒，再在绿色区域连点
+                if not self._wake(3.0):   # 打开游戏后等待3秒，再在绿色区域连点
                     break
             if not self.auto_stop.is_set() and not self.done_auto:
                 self.log("全自动被打断结束")

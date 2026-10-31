@@ -107,7 +107,7 @@ class Config:
     @property
     def stop_heart(self):
         """爱心数降到几颗时自动停止（建议 1-3 颗）"""
-        return max(1, int(getattr(self, "_stop_heart", 3)))
+        return max(1, int(getattr(self, "_stop_heart", 1)))
     
     @stop_heart.setter
     def stop_heart(self, value):
